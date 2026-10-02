@@ -87,15 +87,19 @@ jobs:
 
     - name: Install persistent debug keystore
       run: |
-        mkdir -p ~/.android
-        cp ${{ github.workspace }}/debug.keystore ~/.android/debug.keystore
+        ls -la ${{ github.workspace }}/debug.keystore
+        keytool -list -keystore ${{ github.workspace }}/debug.keystore -storepass android -alias androiddebugkey
 
     - name: Build Debug APKs
       run: |
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
-        ./gradlew assemblePlaystoreDebug
+        ./gradlew assemblePlaystoreDebug -Pandroid.injected.signing.store.file=${{ github.workspace }}/debug.keystore -Pandroid.injected.signing.store.password=android -Pandroid.injected.signing.key.alias=androiddebugkey -Pandroid.injected.signing.key.password=android
+
+    - name: Print APK signing certificate
+      run: |
+        $ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/playstore/debug/*armeabi-v7a*.apk | grep -E "SHA-256|Subject|Issuer" | head -6
 
     - name: Upload arm64-v8a debug APK
       uses: actions/upload-artifact@v7
