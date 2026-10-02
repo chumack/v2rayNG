@@ -85,12 +85,19 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
+    - name: Decode Signing Keystore
+      uses: timheuer/base64-to-file@v2.0.0
+      id: android_keystore
+      with:
+        fileName: "tv-debug-keystore.jks"
+        encodedString: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+
     - name: Build Debug APKs
       run: |
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
-        ./gradlew assemblePlaystoreDebug
+        ./gradlew assemblePlaystoreDebug -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.DEBUG_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.DEBUG_KEY_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.DEBUG_KEY_PASSWORD }}
 
     - name: Upload arm64-v8a debug APK
       uses: actions/upload-artifact@v7
