@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DrawerState
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -22,12 +21,8 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -52,7 +47,7 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
     About(R.drawable.ic_about_24dp, R.string.title_about)
 }
 
-private val primaryDrawerItems = listOf(
+internal val primaryDrawerItems = listOf(
     MainDestination.Subscriptions,
     MainDestination.PerAppProxy,
     MainDestination.Routing,
@@ -60,7 +55,7 @@ private val primaryDrawerItems = listOf(
     MainDestination.Settings
 )
 
-private val drawerItems = primaryDrawerItems + listOf(
+internal val drawerItems = primaryDrawerItems + listOf(
     MainDestination.Promotion,
     MainDestination.Logcat,
     MainDestination.CheckUpdate,
@@ -71,15 +66,6 @@ private val drawerItems = primaryDrawerItems + listOf(
 @Composable
 fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) -> Unit) {
     val drawerScrollState = rememberScrollState()
-    // TV / D-pad support: move focus into the drawer when it opens.
-    // Without this, focus stays on the content behind the scrim and
-    // D-pad keys never reach the drawer items.
-    val firstItemFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(drawerState.targetValue) {
-        if (drawerState.targetValue == DrawerValue.Open) {
-            firstItemFocusRequester.requestFocus()
-        }
-    }
 
     ModalDrawerSheet(
         drawerState = drawerState,
@@ -123,19 +109,12 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
             }
             drawerItems.forEachIndexed { index, item ->
                 if (index == primaryDrawerItems.size) AppDivider()
-                val itemModifier = if (index == 0) {
-                    Modifier
-                        .padding(NavigationDrawerItemDefaults.ItemPadding)
-                        .focusRequester(firstItemFocusRequester)
-                } else {
-                    Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                }
                 NavigationDrawerItem(
                     label = { Text(stringResource(item.labelRes)) },
                     selected = false,
                     onClick = { onNavigate(item) },
                     icon = { Icon(painterResource(item.iconRes), contentDescription = null) },
-                    modifier = itemModifier
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
             }
         }

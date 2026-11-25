@@ -31,16 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
@@ -72,10 +64,6 @@ private const val TEXT_LINE_HEIGHT_FACTOR = 1.3f
  * alike, and never moves, so the bar can be used with one hand. The message is start-aligned (left
  * in LTR, right in RTL, next to the button). Tapping the track tests the current server. On wide
  * screens the bar is capped at [BAR_MAX_WIDTH] and centered.
- *
- * TV / D-pad: the caller owns [fabFocusRequester] so the screen can also send focus back to the
- * button when an overlay (navigation drawer) closes; this composable requests it once on first
- * composition and routes focus from the track to the button.
  */
 @Composable
 fun MainBottomBar(
@@ -83,7 +71,6 @@ fun MainBottomBar(
     isRunning: Boolean,
     isDarkTheme: Boolean,
     onAction: (MainAction) -> Unit,
-    fabFocusRequester: FocusRequester,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -93,16 +80,6 @@ fun MainBottomBar(
     LaunchedEffect(isRunning) {
         if (!isRunning) {
             rotationAnim.snapTo(0f)
-        }
-    }
-
-    // TV / D-pad: give the connect button initial focus so a remote user can toggle the VPN with
-    // DPAD_CENTER without a mouse. Retry briefly: the first request can run before the node is
-    // attached.
-    LaunchedEffect(Unit) {
-        repeat(20) {
-            if (fabFocusRequester.requestFocus()) return@LaunchedEffect
-            kotlinx.coroutines.delay(100)
         }
     }
 
@@ -138,20 +115,6 @@ fun MainBottomBar(
                         .shadow(elevation = 3.dp, shape = CircleShape)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        // TV / D-pad: this track covers the whole bar, so 2D focus search can stop on
-                        // it instead of the connect button drawn on top. Send DPAD_RIGHT (and the
-                        // DPAD_DOWN some remotes emit) explicitly to the button, and keep the same
-                        // request as a key-handler fallback for devices that ignore focus order.
-                        .focusProperties { right = fabFocusRequester }
-                        .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown &&
-                                (event.key == Key.DirectionRight || event.key == Key.DirectionDown)
-                            ) {
-                                fabFocusRequester.requestFocus()
-                            } else {
-                                false
-                            }
-                        }
                         .clickable(onClick = { onAction(MainAction.TestCurrentServer) })
                 )
                 CompositionLocalProvider(LocalLayoutDirection provides textLayoutDirection) {
@@ -203,8 +166,7 @@ fun MainBottomBar(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = knobInset)
-                        .size(KNOB_SIZE)
-                        .focusRequester(fabFocusRequester),
+                        .size(KNOB_SIZE),
                     shape = CircleShape,
                     containerColor = if (isRunning) colorFabActive
                     else if (isDarkTheme) colorFabInactiveDark

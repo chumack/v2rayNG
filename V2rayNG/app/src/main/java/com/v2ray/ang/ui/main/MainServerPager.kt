@@ -2,9 +2,6 @@ package com.v2ray.ang.ui.main
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +24,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -43,13 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -82,8 +79,6 @@ fun GroupPagerPage(
     locateTarget: LocateTarget?,
     doubleColumnDisplay: Boolean,
     searchQuery: String,
-    lazyListStates: MutableMap<String, LazyListState>,
-    lazyGridStates: MutableMap<String, LazyGridState>,
     onSelectServer: (String) -> Unit,
     onEditServer: (String, ProfileItem) -> Unit,
     onShareServer: (String, ProfileItem) -> Unit,
@@ -98,7 +93,8 @@ fun GroupPagerPage(
         mainViewModel.serverGroupState(groupId)
     }
     val groupState by groupStateFlow.collectAsStateWithLifecycle()
-    val canReorder = groupId.isNotEmpty() && searchQuery.isEmpty()
+    val canReorder = groupState.canReorder(groupId, searchQuery)
+    val groupLocateTarget = locateTarget?.takeIf { it.groupId == groupId }
     val actions = remember(
         onSelectServer,
         onEditServer,
@@ -133,16 +129,13 @@ fun GroupPagerPage(
         ServerListPage(
             rows = groupState.rows,
             selectedGuid = selectedGuid,
-            locateTarget = locateTarget?.takeIf { it.groupId == groupId },
+            locateTarget = groupLocateTarget,
             canReorder = canReorder,
             doubleColumnDisplay = doubleColumnDisplay,
-            groupId = groupId,
-            lazyListStates = lazyListStates,
-            lazyGridStates = lazyGridStates,
             actions = actions,
-            onLocateHandled = { mainViewModel.onAction(MainAction.LocateHandled) },
-            onMoveServer = { fromIndex, toIndex ->
-                mainViewModel.moveServer(groupId, fromIndex, toIndex)
+            onLocateHandled = { groupLocateTarget?.let { mainViewModel.onAction(MainAction.LocateHandled(it)) } },
+            onMoveServer = { from, to ->
+                mainViewModel.onAction(MainAction.MoveServer(groupId, from, to))
             },
             contentPadding = listPadding
         )
@@ -175,21 +168,21 @@ private fun ServerListPage(
     locateTarget: LocateTarget?,
     canReorder: Boolean,
     doubleColumnDisplay: Boolean,
-    groupId: String,
-    lazyListStates: MutableMap<String, LazyListState>,
-    lazyGridStates: MutableMap<String, LazyGridState>,
     actions: ServerRowActions,
     onLocateHandled: () -> Unit,
-    onMoveServer: (Int, Int) -> Unit,
+    onMoveServer: (String, String) -> Unit,
     contentPadding: PaddingValues
 ) {
+    fun move(from: Any?, to: Any?) {
+        if (from is String && to is String) onMoveServer(from, to)
+    }
+
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     if (doubleColumnDisplay) {
-        val gridState = remember(groupId) {
-            lazyGridStates.getOrPut(groupId) { LazyGridState() }
-        }
         val reorderableGridState = if (canReorder) {
             rememberReorderableLazyGridState(gridState) { from, to ->
-                onMoveServer(from.index, to.index)
+                move(from.key, to.key)
             }
         } else null
 
@@ -228,12 +221,9 @@ private fun ServerListPage(
             }
         }
     } else {
-        val listState = remember(groupId) {
-            lazyListStates.getOrPut(groupId) { LazyListState() }
-        }
         val reorderableState = if (canReorder) {
             rememberReorderableLazyListState(listState) { from, to ->
-                onMoveServer(from.index, to.index)
+                move(from.key, to.key)
             }
         } else null
 
@@ -363,10 +353,6 @@ private fun ServerListItem(
     } else {
         null
     }
-    // TV / D-pad: track focus to paint a visible gray highlight on the
-    // focused row, matching the highlight of menu items elsewhere.
-    val rowInteractionSource = remember { MutableInteractionSource() }
-    val isRowFocused by rowInteractionSource.collectIsFocusedAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -376,19 +362,7 @@ private fun ServerListItem(
                     stateDescription = selectedStateDescription
                 }
             }
-            .background(
-                if (isRowFocused) MaterialTheme.colorScheme.surfaceVariant
-                else Color.Transparent
-            )
-            // TV / D-pad support: keep the row an explicit single focusable
-            // node so DPAD_UP/DOWN can traverse the server list and
-            // DPAD_CENTER selects, per ui/AGENTS.md interaction rules.
-            .clickable(
-                interactionSource = rowInteractionSource,
-                indication = LocalIndication.current,
-                role = Role.Button,
-                onClick = { actions.select(row.guid) }
-            )
+            .clickable { actions.select(row.guid) }
     ) {
         Box(
             Modifier
